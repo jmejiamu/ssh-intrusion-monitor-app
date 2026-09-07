@@ -10,6 +10,9 @@ import {
   View,
 } from "react-native";
 
+import { API_URL } from "@/config/apiConfig";
+import { socket } from "@/services/socket";
+
 export type SecurityEvent = {
   _id: string;
   type: "ssh_failed_login" | "possible_brute_force";
@@ -34,7 +37,7 @@ export default function Index() {
 
   const fetchData = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/events");
+      const response = await fetch(`${API_URL}/api/events`);
 
       if (!response.ok) {
         throw new Error(`Request failed: ${response.status}`);
@@ -53,6 +56,23 @@ export default function Index() {
 
   useEffect(() => {
     fetchData();
+  }, []);
+  useEffect(() => {
+    socket.connect();
+
+    socket.on("connect", () => {
+      console.log("Socket connected:", socket.id);
+    });
+
+    socket.on("security_event", (event: SecurityEvent) => {
+      setData((current) => [event, ...current]);
+    });
+
+    return () => {
+      socket.off("connect");
+      socket.off("security_event");
+      socket.disconnect();
+    };
   }, []);
 
   const onRefresh = () => {
