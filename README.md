@@ -83,6 +83,8 @@ pnpm start
 
 The mobile device and API server must be reachable over the same network when using a local API address.
 
+<img width="345" height="768" alt="Image" src="https://github.com/user-attachments/assets/7e7b7985-c940-489d-a5a6-b4e124659d2f" />
+
 ## Related Repositories
 
 This application is the visualization layer of the SSH Intrusion Detection & Monitoring System.
