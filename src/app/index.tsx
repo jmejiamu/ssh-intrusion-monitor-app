@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,87 +10,64 @@ import {
   View,
 } from "react-native";
 
-import { API_URL } from "@/config/apiConfig";
+import {
+  type Filter,
+  type SecurityEvent,
+  useSecurityEvents,
+} from "@/hooks/useSecurityEvent";
+
 import { socket } from "@/services/socket";
 
-export type SecurityEvent = {
-  _id: string;
-  type: "ssh_failed_login" | "possible_brute_force";
-  severity: "medium" | "high";
-  username: string;
-  ip_address: string;
-  attempt_count: number;
-  timestamp: string;
-  should_alert: boolean;
-  createdAt: string;
-  updatedAt: string;
-  __v: number;
-};
-
-type Filter = "all" | "high" | "medium";
-
 export default function Index() {
-  const [data, setData] = useState<SecurityEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<Filter>("all");
-
-  const fetchData = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/events`);
-
-      if (!response.ok) {
-        throw new Error(`Request failed: ${response.status}`);
-      }
-
-      const events: SecurityEvent[] = await response.json();
-
-      setData(events);
-    } catch (error) {
-      console.error("Failed to fetch security events:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const {
+    events,
+    filter,
+    total,
+    loading,
+    loadingMore,
+    refreshing,
+    fetchEvents,
+    loadMore,
+    refresh,
+    changeFilter,
+    addEvent,
+  } = useSecurityEvents();
 
   useEffect(() => {
-    fetchData();
+    fetchEvents();
   }, []);
+
   useEffect(() => {
     socket.connect();
 
-    socket.on("connect", () => {
+    const handleConnect = () => {
       console.log("Socket connected:", socket.id);
-    });
+    };
 
-    socket.on("security_event", (event: SecurityEvent) => {
-      setData((current) => [event, ...current]);
-    });
+    const handleEvent = (event: SecurityEvent) => {
+      addEvent(event);
+    };
+
+    const handleConnectionError = (error: Error) => {
+      console.log("Socket connection error:", error.message);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("security_event", handleEvent);
+    socket.on("connect_error", handleConnectionError);
 
     return () => {
-      socket.off("connect");
-      socket.off("security_event");
+      socket.off("connect", handleConnect);
+      socket.off("security_event", handleEvent);
+      socket.off("connect_error", handleConnectionError);
+
       socket.disconnect();
     };
-  }, []);
+  }, [filter]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchData();
-  };
+  const highCount = events.filter((event) => event.severity === "high").length;
 
-  const filteredEvents = useMemo(() => {
-    if (filter === "all") {
-      return data;
-    }
-
-    return data.filter((event) => event.severity === filter);
-  }, [data, filter]);
-
-  const highCount = data.filter((event) => event.severity === "high").length;
-
-  const mediumCount = data.filter(
+  const mediumCount = events.filter(
     (event) => event.severity === "medium",
   ).length;
 
@@ -98,6 +75,7 @@ export default function Index() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#39D98A" />
+
         <Text style={styles.loadingText}>Loading security events...</Text>
       </View>
     );
@@ -106,14 +84,16 @@ export default function Index() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlatList
-        data={filteredEvents}
+        data={events}
         keyExtractor={(item) => item._id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.2}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={refresh}
             tintColor="#39D98A"
           />
         }
@@ -132,6 +112,7 @@ export default function Index() {
 
               <View style={styles.status}>
                 <View style={styles.statusDot} />
+
                 <Text style={styles.statusText}>ONLINE</Text>
               </View>
             </View>
@@ -139,18 +120,21 @@ export default function Index() {
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>TOTAL EVENTS</Text>
-                <Text style={styles.statValue}>{data.length}</Text>
+
+                <Text style={styles.statValue}>{total}</Text>
               </View>
 
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>HIGH</Text>
+                <Text style={styles.statLabel}>HIGH LOADED</Text>
+
                 <Text style={[styles.statValue, styles.highText]}>
                   {highCount}
                 </Text>
               </View>
 
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>MEDIUM</Text>
+                <Text style={styles.statLabel}>MEDIUM LOADED</Text>
+
                 <Text style={[styles.statValue, styles.mediumText]}>
                   {mediumCount}
                 </Text>
@@ -160,14 +144,13 @@ export default function Index() {
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionTitle}>Recent Events</Text>
+
                 <Text style={styles.sectionSubtitle}>
                   Authentication activity
                 </Text>
               </View>
 
-              <Text style={styles.eventCount}>
-                {filteredEvents.length} events
-              </Text>
+              <Text style={styles.eventCount}>{total} events</Text>
             </View>
 
             <View style={styles.filters}>
@@ -177,7 +160,7 @@ export default function Index() {
                 return (
                   <Pressable
                     key={item}
-                    onPress={() => setFilter(item)}
+                    onPress={() => changeFilter(item)}
                     style={[
                       styles.filterButton,
                       selected && styles.filterButtonSelected,
@@ -200,10 +183,20 @@ export default function Index() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No security events</Text>
+
             <Text style={styles.emptyText}>
               No events match the selected severity.
             </Text>
           </View>
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator
+              size="small"
+              color="#39D98A"
+              style={styles.footerLoader}
+            />
+          ) : null
         }
         renderItem={({ item }) => {
           const isHigh = item.severity === "high";
@@ -247,16 +240,19 @@ export default function Index() {
                 <View style={styles.details}>
                   <View style={styles.detail}>
                     <Text style={styles.detailLabel}>SOURCE IP</Text>
+
                     <Text style={styles.ipAddress}>{item.ip_address}</Text>
                   </View>
 
                   <View style={styles.detail}>
                     <Text style={styles.detailLabel}>USER</Text>
+
                     <Text style={styles.detailValue}>{item.username}</Text>
                   </View>
 
                   <View style={styles.detail}>
                     <Text style={styles.detailLabel}>ATTEMPTS</Text>
+
                     <Text style={styles.detailValue}>{item.attempt_count}</Text>
                   </View>
                 </View>
@@ -301,11 +297,6 @@ function formatDate(timestamp: string) {
 
 const styles = StyleSheet.create({
   safeArea: {
-    flex: 1,
-    backgroundColor: "#090D12",
-  },
-
-  container: {
     flex: 1,
     backgroundColor: "#090D12",
   },
@@ -611,5 +602,9 @@ const styles = StyleSheet.create({
     color: "#6E7681",
     fontSize: 13,
     marginTop: 5,
+  },
+
+  footerLoader: {
+    marginVertical: 20,
   },
 });
