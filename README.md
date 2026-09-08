@@ -1,56 +1,91 @@
-# Welcome to your Expo app 👋
+# SSH Intrusion Monitor App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native security dashboard for monitoring SSH authentication events detected by the Raspberry Pi SSH Intrusion Monitor.
 
-## Get started
+The app displays security events in real time, allowing suspicious login activity and potential brute-force attacks to be monitored from a mobile device.
 
-1. Install dependencies
+## Features
 
-   ```bash
-   npm install
-   ```
+- Real-time security event monitoring
+- Live updates with Socket.io
+- High and medium severity classification
+- Severity-based event filtering
+- Paginated event history
+- Pull-to-refresh
+- Failed login attempt counts
+- Source IP and username visibility
 
-2. Start the app
+## Architecture
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```text
+Raspberry Pi
+     ↓
+Python SSH Monitor
+     ↓
+Express API
+     ↓
+MongoDB
+     ↓
+Socket.io
+     ↓
+React Native Dashboard
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Event Types
 
-### Other setup steps
+The dashboard displays two types of security events:
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+- `ssh_failed_login` — Individual failed SSH authentication attempt
+- `possible_brute_force` — Multiple failed attempts detected from the same IP within the detection window
 
-## Learn more
+Events are classified by severity:
 
-To learn more about developing your project with Expo, look at the following resources:
+- `medium` — Failed SSH login
+- `high` — Potential brute-force attack
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Real-Time Monitoring
 
-## Join the community
+The app connects to the backend using Socket.io and listens for:
 
-Join our community of developers creating universal apps.
+```text
+security_event
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+When the Raspberry Pi detects new SSH activity, the event is processed by the API and automatically appears on the dashboard without requiring a manual refresh.
+
+## Tech Stack
+
+- React Native
+- Expo
+- TypeScript
+- Expo Router
+- Socket.io Client
+
+## Setup
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+Configure the API address:
+
+```ts
+const API_URL = "http://YOUR_API_IP:3001";
+```
+
+Start the Expo development server:
+
+```bash
+pnpm start
+```
+
+The mobile device and API server must be reachable over the same network when using a local API address.
+
+## Related Repositories
+
+This application is the visualization layer of the SSH Intrusion Detection & Monitoring System.
+
+- [Raspberry Pi Monitor](https://github.com/jmejiamu/raspberry-pi-ssh-monitor) — Monitors Linux authentication logs and detects suspicious SSH activity.
+- [Backend API](https://github.com/jmejiamu/ssh-intrusion-monitor-api) — Validates, stores, and streams security events to the dashboard.
